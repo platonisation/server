@@ -2,7 +2,24 @@
  * server.c
  *
  *  Created on: Apr 16, 2014
- *      Author: platon
+ *  Author: Timoté Bonnin
+ *
+ *
+ *  Kill if receive ctrl+c
+ *
+ *  protocole : [src][dst][size msg]
+ *  bytestuffing ==> 	A msg A
+ *  Si msg include A
+ *  	A A A ==> A ESC A A
+ *  Si msg include ESC
+ *  	A ESC A ==> A ESC ESC A
+ *  Si msg include ESC A
+ *  	A ESC A A ==> A ESC ESC ESC A A    =======> en gros j'échappe le caractere suivant
+ *  	0x02 begin and end
+ *  	0x1b ESC char
+ *
+ * 	Authentification fonctionne par couple IP : ID
+ *
  */
 
 #include <sys/socket.h>       /*  socket definitions        */
@@ -23,37 +40,45 @@
 
 /*  Read a line from a socket  */
 
-ssize_t Readline(int sockd, void *vptr, size_t maxlen) {
+int Readline(int sockd, void *vptr, size_t maxlen) {
 
 	//size=read(0,buf,1);
 
-	ssize_t n, rc;
-    char    c, *buffer;
 
-    buffer = vptr;
-
-    for ( n = 1; n < maxlen; n++ ) {
-
-	if ( (rc = read(sockd, &c, 1)) == 1 ) {
-	    *buffer++ = c;
-	    if ( c == '\n' )
-		break;
-	}
-	else if ( rc == 0 ) {
-	    if ( n == 1 )
-		return 0;
-	    else
-		break;
-	}
-	else {
-	    if ( errno == EINTR )
-		continue;
-	    return -1;
-	}
-    }
-
-    *buffer = 0;
-    return n;
+	// lire si 0x02
+	// lire src
+	// lire dst
+	// pour chaque data
+		// lire si ESC
+			//lire suivant
+		// sinon ajouter au buffer
+//	ssize_t n, rc;
+//    char    c, *buffer;
+//
+//    buffer = vptr;
+//
+//    for ( n = 1; n < maxlen; n++ ) {
+//
+//	if ( (rc = read(sockd, &c, 1)) == 1 ) {
+//	    *buffer++ = c;
+//	    if ( c == '\n' )
+//		break;
+//	}
+//	else if ( rc == 0 ) {
+//	    if ( n == 1 )
+//		return 0;
+//	    else
+//		break;
+//	}
+//	else {
+//	    if ( errno == EINTR )
+//		continue;
+//	    return -1;
+//	}
+//    }
+//
+//    *buffer = 0;
+    return 1;
 }
 
 
