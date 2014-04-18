@@ -7,16 +7,8 @@
  *
  *  Kill if receive ctrl+c
  *
- *  protocole : [src][dst][size msg]
- *  bytestuffing ==> 	A msg A
- *  Si msg include A
- *  	A A A ==> A ESC A A
- *  Si msg include ESC
- *  	A ESC A ==> A ESC ESC A
- *  Si msg include ESC A
- *  	A ESC A A ==> A ESC ESC ESC A A    =======> en gros j'échappe le caractere suivant
- *  	0x02 begin and end
- *  	0x1b ESC char
+ *  protocole : [accorche][header][msg]
+ *  [header] = [src][dst][size msg]
  *
  * 	Authentification fonctionne par couple IP : ID
  *
@@ -42,16 +34,51 @@
 
 int Readline(int sockd, void *vptr, size_t maxlen) {
 
-	//size=read(0,buf,1);
+	int rc;
+	//data to read
+	char start;
+	char* src;
+	char* dst;
+	char* size;
+	char* data;
 
+	//read selection
+	fd_set read_selector;
+	//timeout of read
+	struct timeval timeout;
+	timeout.tv_sec = 30;
+	timeout.tv_usec = 0;
+	//return value
+	int retval;
+	//init read selection
+	FD_ZERO(&read_selector);
+	FD_SET(sockd,read_selector);
 
-	// lire si 0x02
-	// lire src
-	// lire dst
-	// pour chaque data
-		// lire si ESC
-			//lire suivant
-		// sinon ajouter au buffer
+	retval = select(sockd+1,&read_selector,NULL,NULL,&timeout);
+
+	if(retval) {
+		//treat data
+		read(sockd, &start, 1);
+		if (start == 0xFE) {
+			read(sockd,&src,4);
+			read(sockd,&dst,4);
+			read(sockd,&src,4);
+			read(sockd,&size,4);
+			//size in bytes
+			if(atoi(size) < 10000000){//10Mo, msg
+				if((rc = read(sockd,vptr,atoi(size)) == atoi(size)));
+			}
+			else { // files :: ERROR ?????
+				//dunno yet
+			}
+		}
+	}
+	else if(retval == -1){
+		//treat error
+	}
+	else{
+		//treat no data found
+	}
 //	ssize_t n, rc;
 //    char    c, *buffer;
 //
