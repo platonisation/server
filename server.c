@@ -34,13 +34,19 @@
 
 int Readline(int sockd, void *vptr, size_t maxlen) {
 
+
 	int rc;
 	//data to read
-	char start;
-	char* src;
-	char* dst;
-	char* size;
-	char* data;
+	unsigned char start;
+	unsigned char src[4];
+	unsigned char dst[4];
+	unsigned char size;
+	unsigned char data[20];
+
+//	if ( (rc = read(sockd, data, 12)) == 12 ){
+//	printf("\n\nCOCOU\n\n");
+//	printf("Val : %s\n",data);
+//	}
 
 	//read selection
 	fd_set read_selector;
@@ -52,33 +58,40 @@ int Readline(int sockd, void *vptr, size_t maxlen) {
 	int retval;
 	//init read selection
 	FD_ZERO(&read_selector);
-	FD_SET(sockd,read_selector);
-
+	FD_SET(sockd,&read_selector);
 	retval = select(sockd+1,&read_selector,NULL,NULL,&timeout);
-
 	if(retval) {
 		//treat data
+		printf("start\n");
 		read(sockd, &start, 1);
 		if (start == 0xFE) {
-			read(sockd,&src,4);
-			read(sockd,&dst,4);
-			read(sockd,&src,4);
-			read(sockd,&size,4);
+			printf("startok%d\n",start);
+//			read(sockd,src,4);
+//			read(sockd,dst,4);
+			read(sockd,&size,1);
+			printf("Bal4%d\n",size);
 			//size in bytes
-			if(atoi(size) < 10000000){//10Mo, msg
-				if((rc = read(sockd,vptr,atoi(size)) == atoi(size)));
+			if(size < 10000000){//10Mo, msg
+				printf("Bal5\n");
+				if((rc = read(sockd,vptr,size) == size));
+				printf("%s\n",vptr);
 			}
 			else { // files :: ERROR ?????
 				//dunno yet
+				printf("MEGA ERROR DE LA MORT\n");
 			}
 		}
+		printf("APU\n");
 	}
 	else if(retval == -1){
 		//treat error
+		printf("RETVAL==1");
 	}
 	else{
 		//treat no data found
+		printf("NODATA?");
 	}
+	printf("bitl\n");
 //	ssize_t n, rc;
 //    char    c, *buffer;
 //
