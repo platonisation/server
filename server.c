@@ -32,15 +32,13 @@
 
 /*  Read a line from a socket  */
 
-int Readline(int sockd, void *vptr, size_t maxlen) {
+int Readline(int sockd, char* buffer, size_t maxlen) {
 
-
-	int rc;
 	//data to read
 	unsigned char start;
 	unsigned char src[4];
 	unsigned char dst[4];
-	unsigned char size;
+	unsigned int size;
 	unsigned char data[20];
 
 //	if ( (rc = read(sockd, data, 12)) == 12 ){
@@ -62,99 +60,45 @@ int Readline(int sockd, void *vptr, size_t maxlen) {
 	retval = select(sockd+1,&read_selector,NULL,NULL,&timeout);
 	if(retval) {
 		//treat data
-		printf("start\n");
 		read(sockd, &start, 1);
 		if (start == 0xFE) {
-			printf("startok%d\n",start);
 //			read(sockd,src,4);
 //			read(sockd,dst,4);
 			read(sockd,&size,1);
-			printf("Bal4%d\n",size);
 			//size in bytes
 			if(size < 10000000){//10Mo, msg
-				printf("Bal5\n");
-				if((rc = read(sockd,vptr,size) == size));
-				printf("%s\n",vptr);
+				if((read(sockd,buffer,size) != size)){
+					//Lecture ok
+					printf("Cannot read datas\n");
+				}
+				else {
+					doAction(buffer,size);
+				}
+
 			}
-			else { // files :: ERROR ?????
-				//dunno yet
-				printf("MEGA ERROR DE LA MORT\n");
+			else { // files
+				printf("This is a file\n");
 			}
 		}
-		printf("APU\n");
+		else {
+			printf("Not a starting sequence\n");
+		}
 	}
 	else if(retval == -1){
 		//treat error
-		printf("RETVAL==1");
+		printf("RETVAL==1\n");
 	}
 	else{
 		//treat no data found
-		printf("NODATA?");
+		printf("NODATA?\n");
 	}
-	printf("bitl\n");
-//	ssize_t n, rc;
-//    char    c, *buffer;
-//
-//    buffer = vptr;
-//
-//    for ( n = 1; n < maxlen; n++ ) {
-//
-//	if ( (rc = read(sockd, &c, 1)) == 1 ) {
-//	    *buffer++ = c;
-//	    if ( c == '\n' )
-//		break;
-//	}
-//	else if ( rc == 0 ) {
-//	    if ( n == 1 )
-//		return 0;
-//	    else
-//		break;
-//	}
-//	else {
-//	    if ( errno == EINTR )
-//		continue;
-//	    return -1;
-//	}
-//    }
-//
-//    *buffer = 0;
-    return 1;
+
+	return 1;
 }
 
-
-/*  Write a line to a socket  */
-
-ssize_t Writeline(int sockd, const void *vptr, size_t n) {
-    size_t      nleft;
-    ssize_t     nwritten;
-    const char *buffer;
-
-    buffer = vptr;
-    nleft  = n;
-
-    while ( nleft > 0 ) {
-	if ( (nwritten = write(sockd, buffer, nleft)) <= 0 ) {
-	    if ( errno == EINTR )
-		nwritten = 0;
-	    else
-		return -1;
-	}
-	nleft  -= nwritten;
-	buffer += nwritten;
-    }
-
-    return n;
-}
-
-void killsrv(int conn_s){
-	if ( close(conn_s) < 0 ) {
-		    fprintf(stderr, "ECHOSERV: Error calling close()\n");
-		    exit(EXIT_FAILURE);
-	}
-}
-
-
-
+void doAction(char* buffer, int size);
+void killsrv(int conn_s);
+ssize_t Writeline(int sockd, const void *vptr, size_t n);
 
 int main(int argc, char *argv[]) {
     int       list_s;                /*  listening socket          */
@@ -242,4 +186,42 @@ int main(int argc, char *argv[]) {
 	    exit(EXIT_FAILURE);
 	}
     }
+}
+
+//do something according to buffer's datas
+void doAction(char* buffer,int size) {
+	char action[1000]={'a',',','b',',','c',',','d'};
+	strcpy(buffer,action);
+}
+
+
+/*  Write a line to a socket  */
+
+ssize_t Writeline(int sockd, const void *vptr, size_t n) {
+    size_t      nleft;
+    ssize_t     nwritten;
+    const char *buffer;
+
+    buffer = vptr;
+    nleft  = n;
+
+    while ( nleft > 0 ) {
+	if ( (nwritten = write(sockd, buffer, nleft)) <= 0 ) {
+	    if ( errno == EINTR )
+		nwritten = 0;
+	    else
+		return -1;
+	}
+	nleft  -= nwritten;
+	buffer += nwritten;
+    }
+
+    return n;
+}
+
+void killsrv(int conn_s){
+	if ( close(conn_s) < 0 ) {
+		    fprintf(stderr, "ECHOSERV: Error calling close()\n");
+		    exit(EXIT_FAILURE);
+	}
 }
