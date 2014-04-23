@@ -32,6 +32,19 @@ autre utilisateur
 #include <stdlib.h>
 #include <stdio.h>
 
+typedef struct globalData {
+    int       	socketFd;               /*  connection socket         */
+    int       	list_s;                 /*  listening socket          */
+    short int 	port;                   /*  port number               */
+    struct    	sockaddr_in servaddr;	/*  socket address structure  */
+    char*		messageToSend;			/* message from server to client*/
+    char*		messageToReceive;			/* message from server to client*/
+    int			endConnection;//bof bof peut etre enum ?
+
+}context;
+
+//pour les tests. a changer
+context ctx;
 
 /*  Global constants  */
 
@@ -41,32 +54,33 @@ autre utilisateur
 
 int Readline(int sockd, char* buffer, size_t maxlen);
 void doAction(char* buffer, int size);
-void killsrv(int conn_s);
+void killsrv(int socketFd);
 ssize_t Writeline(int sockd, const void *vptr, size_t n);
 char* parseMessage(char* buffer, int size) ;
 
 int main(int argc, char *argv[]) {
-    int       list_s;                /*  listening socket          */
-    int       conn_s;                /*  connection socket         */
-    short int port;                  /*  port number               */
-    struct    sockaddr_in servaddr;  /*  socket address structure  */
+
     char      buffer[MAX_LINE];      /*  character buffer          */
     char     *endptr;                /*  for strtol()              */
-    char*	messageToSend;
+
+
+
     pid_t son;
+
+    ctx.endConnection = 0;
 
     /*  Get port number from the command line, and
         set to default port if no arguments were supplied  */
 
     if ( argc == 2 ) {
-	port = strtol(argv[1], &endptr, 0);
+	ctx.port = strtol(argv[1], &endptr, 0);
 	if ( *endptr ) {
 	    fprintf(stderr, "ECHOSERV: Invalid port number.\n");
 	    exit(EXIT_FAILURE);
 	}
     }
     else if ( argc < 2 ) {
-	port = ECHO_PORT;
+	ctx.port = ECHO_PORT;
     }
     else {
 	fprintf(stderr, "ECHOSERV: Invalid arguments.\n");
@@ -76,7 +90,7 @@ int main(int argc, char *argv[]) {
 
     /*  Create the listening socket  */
 
-    if ( (list_s = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+    if ( (ctx.list_s = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
 	fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
 	exit(EXIT_FAILURE);
     }
@@ -84,21 +98,21 @@ int main(int argc, char *argv[]) {
     /*  Set all bytes in socket address structure to
         zero, and fill in the relevant data members   */
 
-    memset(&servaddr, 0, sizeof(servaddr));
-    servaddr.sin_family      = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port        = htons(port);
+    memset(&(ctx.servaddr), 0, sizeof(ctx.servaddr));
+    ctx.servaddr.sin_family      = AF_INET;
+    ctx.servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    ctx.servaddr.sin_port        = htons(ctx.port);
 
 
     /*  Bind our socket address to the
 	listening socket, and call listen()  */
 
-    if ( bind(list_s, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ) {
+    if ( bind(ctx.list_s, (struct sockaddr *) &(ctx.servaddr), sizeof(ctx.servaddr)) < 0 ) {
 	fprintf(stderr, "ECHOSERV: Error calling bind()\n");
 	exit(EXIT_FAILURE);
     }
 
-    if ( listen(list_s, LISTENQ) < 0 ) {
+    if ( listen(ctx.list_s, LISTENQ) < 0 ) {
 	fprintf(stderr, "ECHOSERV: Error calling listen()\n");
 	exit(EXIT_FAILURE);
     }
@@ -111,26 +125,31 @@ int main(int argc, char *argv[]) {
 
 		/*  Wait for a connection, then accept() it  */
 
-		if ( (conn_s = accept(list_s, NULL, NULL) ) < 0 ) {
+		if ( (ctx.socketFd = accept(ctx.list_s, NULL, NULL) ) < 0 ) {
 			fprintf(stderr, "ECHOSERV: Error calling accept()\n");
-			killsrv(conn_s);
+			killsrv(ctx.socketFd);
 			exit(EXIT_FAILURE);
 		}
 		else{
 			if((son=fork()==0)){
-				/*  Retrieve an input line from the connected socket
-				then simply write it back to the same socket.     */
 
-				Readline(conn_s, buffer, MAX_LINE-1);
-				messageToSend = parseMessage(buffer,strlen(buffer));
-				Writeline(conn_s, messageToSend, strlen(messageToSend));
+				while(!(ctx.endConnection)){
+					/*  Retrieve an input line from the connected socket
+					then simply write it back to the same socket.     */
+
+					Readline(ctx.socketFd, buffer, MAX_LINE-1);
+					ctx.messageToSend = parseMessage(buffer,strlen(buffer));
+					Writeline(ctx.socketFd, ctx.messageToSend, strlen(ctx.messageToSend));
+
+				}
 
 				/*  Close the connected socket  */
 
-				if ( close(conn_s) < 0 ) {
+				if ( close(ctx.socketFd) < 0 ) {
 				    fprintf(stderr, "ECHOSERV: Error calling close()\n");
 				    exit(EXIT_FAILURE);
 				}
+				printf("LE CLIENT IS DEAD !\n");
 			}
 		}
     }
@@ -141,12 +160,23 @@ int main(int argc, char *argv[]) {
 void doAction(char* buffer,int size) {
 	//char action[1000]={'a',',','b',',','c',',','d'};
 	//strcpy(buffer,action);
+
+	printf("My action : %s\n",buffer);
+
+	//fixme: this function is full of shit
 	char commande[6];
 	memcpy(commande,buffer,5);
 	if(buffer[0] == '?' || (strcmp(commande,"help") == 0)){
 		int len=4;
 		memcpy(buffer,"PUSH",len);
 		buffer[len]='\0';
+	}
+	else if(strcmp(buffer,"quit") == 0){
+		ctx.endConnection = 1;
+	}
+	else{
+		printf("Unknown command\n");
+		memcpy(buffer,"Unknown command",14);
 	}
 }
 
@@ -175,8 +205,8 @@ ssize_t Writeline(int sockd, const void *vptr, size_t n) {
     return n;
 }
 
-void killsrv(int conn_s){
-	if ( close(conn_s) < 0 ) {
+void killsrv(int socketFd){
+	if ( close(socketFd) < 0 ) {
 		    fprintf(stderr, "ECHOSERV: Error calling close()\n");
 		    exit(EXIT_FAILURE);
 	}
@@ -244,6 +274,7 @@ int Readline(int sockd, char* buffer, size_t maxlen) {
 		printf("RETVAL==1\n");
 	}
 	else{
+		ctx.endConnection = 1;
 		//treat no data found
 		printf("NODATA?\n");
 	}
