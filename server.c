@@ -39,77 +39,11 @@ autre utilisateur
 #define MAX_LINE           (1000)
 #define LISTENQ				100
 
-
-/*  Read a line from a socket  */
-
-int Readline(int sockd, char* buffer, size_t maxlen) {
-
-	//data to read
-	unsigned char start;
-	unsigned char src[4];
-	unsigned char dst[4];
-	unsigned int size;
-	unsigned char data[20];
-
-//	if ( (rc = read(sockd, data, 12)) == 12 ){
-//	printf("\n\nCOCOU\n\n");
-//	printf("Val : %s\n",data);
-//	}
-
-	//read selection
-	fd_set read_selector;
-	//timeout of read
-	struct timeval timeout;
-	timeout.tv_sec = 30;
-	timeout.tv_usec = 0;
-	//return value
-	int retval;
-	//init read selection
-	FD_ZERO(&read_selector);
-	FD_SET(sockd,&read_selector);
-	retval = select(sockd+1,&read_selector,NULL,NULL,&timeout);
-	if(retval) {
-		//treat data
-		read(sockd, &start, 1);
-		if (start == 0xFE) {
-//			read(sockd,src,4);
-//			read(sockd,dst,4);
-			read(sockd,&size,1);
-			//size in bytes
-			if(size < 10000000){//10Mo, msg
-				if((read(sockd,buffer,size) != size)){
-					//Lecture ok
-					printf("Cannot read datas\n");
-				}
-				else {
-					doAction(buffer,size);
-				}
-
-			}
-			else { // files
-				//attention bug ! client envoie coucou trouve un fichier
-				printf("This is a file\n");
-			}
-		}
-		else {
-			printf("Not a starting sequence\n");
-		}
-	}
-	else if(retval == -1){
-		//treat error
-		printf("RETVAL==1\n");
-	}
-	else{
-		//treat no data found
-		printf("NODATA?\n");
-	}
-
-	return 1;
-}
-
+int Readline(int sockd, char* buffer, size_t maxlen);
 void doAction(char* buffer, int size);
 void killsrv(int conn_s);
 ssize_t Writeline(int sockd, const void *vptr, size_t n);
+char* parseMessage(char* buffer, int size) ;
 
 int main(int argc, char *argv[]) {
     int       list_s;                /*  listening socket          */
@@ -118,7 +52,8 @@ int main(int argc, char *argv[]) {
     struct    sockaddr_in servaddr;  /*  socket address structure  */
     char      buffer[MAX_LINE];      /*  character buffer          */
     char     *endptr;                /*  for strtol()              */
-
+    char*	messageToSend;
+    pid_t son;
 
     /*  Get port number from the command line, and
         set to default port if no arguments were supplied  */
@@ -174,39 +109,44 @@ int main(int argc, char *argv[]) {
 
     while ( 1 ) {
 
-	/*  Wait for a connection, then accept() it  */
+		/*  Wait for a connection, then accept() it  */
 
-	if ( (conn_s = accept(list_s, NULL, NULL) ) < 0 ) {
-	    fprintf(stderr, "ECHOSERV: Error calling accept()\n");
-	    killsrv(conn_s);
-	    exit(EXIT_FAILURE);
-	}
+		if ( (conn_s = accept(list_s, NULL, NULL) ) < 0 ) {
+			fprintf(stderr, "ECHOSERV: Error calling accept()\n");
+			killsrv(conn_s);
+			exit(EXIT_FAILURE);
+		}
+		else{
+			if((son=fork()==0)){
+				/*  Retrieve an input line from the connected socket
+				then simply write it back to the same socket.     */
 
+				Readline(conn_s, buffer, MAX_LINE-1);
+				messageToSend = parseMessage(buffer,strlen(buffer));
+				Writeline(conn_s, messageToSend, strlen(messageToSend));
 
-	/*  Retrieve an input line from the connected socket
-	    then simply write it back to the same socket.     */
+				/*  Close the connected socket  */
 
-	Readline(conn_s, buffer, MAX_LINE-1);
-	Writeline(conn_s, buffer, strlen(buffer));
-
-
-	/*  Close the connected socket  */
-
-	if ( close(conn_s) < 0 ) {
-	    fprintf(stderr, "ECHOSERV: Error calling close()\n");
-	    exit(EXIT_FAILURE);
-	}
+				if ( close(conn_s) < 0 ) {
+				    fprintf(stderr, "ECHOSERV: Error calling close()\n");
+				    exit(EXIT_FAILURE);
+				}
+			}
+		}
     }
 }
 
 //do something according to buffer's datas
+//commande : PUSH, GET, LIST, CONNECT,
 void doAction(char* buffer,int size) {
 	//char action[1000]={'a',',','b',',','c',',','d'};
 	//strcpy(buffer,action);
-	char commande[5];
+	char commande[6];
 	memcpy(commande,buffer,5);
 	if(buffer[0] == '?' || (strcmp(commande,"help") == 0)){
-		memcpy(buffer,"PUSH,GET",8);
+		int len=4;
+		memcpy(buffer,"PUSH",len);
+		buffer[len]='\0';
 	}
 }
 
@@ -240,4 +180,83 @@ void killsrv(int conn_s){
 		    fprintf(stderr, "ECHOSERV: Error calling close()\n");
 		    exit(EXIT_FAILURE);
 	}
+}
+
+/*  Read a line from a socket  */
+
+int Readline(int sockd, char* buffer, size_t maxlen) {
+
+	//data to read
+	unsigned char start;
+	unsigned char src[4];
+	unsigned char dst[4];
+	unsigned char size;
+	unsigned char data[20];
+
+//	if ( (rc = read(sockd, data, 12)) == 12 ){
+//	printf("\n\nCOCOU\n\n");
+//	printf("Val : %s\n",data);
+//	}
+
+	//read selection
+	fd_set read_selector;
+	//timeout of read
+	struct timeval timeout;
+	timeout.tv_sec = 30;
+	timeout.tv_usec = 0;
+	//return value
+	int retval;
+	//init read selection
+	FD_ZERO(&read_selector);
+	FD_SET(sockd,&read_selector);
+	retval = select(sockd+1,&read_selector,NULL,NULL,NULL);
+	if(retval) {
+		//treat data
+		read(sockd, &start, 1);
+		if (start == 0xFE) {
+//			read(sockd,src,4);
+//			read(sockd,dst,4);
+			read(sockd,&size,1);
+			printf("size:%d\n",size);
+			//size in bytes
+			if(size < 10000000){//10Mo, msg
+				if((read(sockd,buffer,size) != size)){
+					//Lecture ok
+					printf("Cannot read %d datas\n",size);
+				}
+				else {
+					printf("%s",buffer);
+					doAction(buffer,size);
+				}
+
+			}
+			else { // files
+				//attention bug ! client envoie coucou trouve un fichier
+				printf("This is a file\n");
+			}
+		}
+		else {
+			printf("Not a starting sequence\n");
+		}
+	}
+	else if(retval == -1){
+		//treat error
+		printf("RETVAL==1\n");
+	}
+	else{
+		//treat no data found
+		printf("NODATA?\n");
+	}
+
+	return 1;
+}
+
+char* parseMessage(char* buffer, int size) {
+	char* s;
+	s = malloc(size*sizeof(char) + 2);
+	s[0]=0xFE;
+	s[1]=strlen(buffer);
+	strcat(s,buffer);
+
+	return s;
 }
