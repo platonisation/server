@@ -12,6 +12,16 @@
  *
  * 	Authentification fonctionne par couple IP : ID
  *
+ *
+ Serveur
+**Des notications sont envoyées aux clients à chaque connexion et déconnexion.
+**Chaque serveur doit maintenir une liste des membres connectés sur le réseau.
+**Un utilisateur p eut créer un compte (pseudo / mot de passe). Ce doit être une notion globale au
+réseau : un compte enregistré depuis un serveur doit être reconnu à une pro chaine connexion sur
+un autre serveur.
+**Un utilisateur enregistré p eut être administrateur du réseau. Il p eut alors expulser bannir un
+autre utilisateur
+ *
  */
 
 #include <sys/socket.h>       /*  socket definitions        */
@@ -77,6 +87,7 @@ int Readline(int sockd, char* buffer, size_t maxlen) {
 
 			}
 			else { // files
+				//attention bug ! client envoie coucou trouve un fichier
 				printf("This is a file\n");
 			}
 		}
@@ -190,8 +201,13 @@ int main(int argc, char *argv[]) {
 
 //do something according to buffer's datas
 void doAction(char* buffer,int size) {
-	char action[1000]={'a',',','b',',','c',',','d'};
-	strcpy(buffer,action);
+	//char action[1000]={'a',',','b',',','c',',','d'};
+	//strcpy(buffer,action);
+	char commande[5];
+	memcpy(commande,buffer,5);
+	if(buffer[0] == '?' || (strcmp(commande,"help") == 0)){
+		memcpy(buffer,"PUSH,GET",8);
+	}
 }
 
 
