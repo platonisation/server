@@ -1,0 +1,6 @@
+[submodule "submodule"]
+	path = submodule
+	url = git@github.com:platonisation/communication.git
+[submodule "dependencies/communication"]
+	path = dependencies/communication
+	url = git@github.com:platonisation/communication.git
