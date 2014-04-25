@@ -148,6 +148,8 @@ int main(int argc, char *argv[]) {
 				debugTrace("Message sent : ");
 	//			}
 
+				/*free mallocs*/
+
 				/*  Close the connected socket  */
 
 				if ( close(ctx.socketFd) < 0 ) {
