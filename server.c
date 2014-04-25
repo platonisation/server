@@ -28,8 +28,15 @@ autre utilisateur
 
 #include "dependencies/communication/communication.h"
 
+/*  Global constants  */
+
+#define ECHO_PORT          (2014)
+#define MAX_LINE           (1000)
+#define LISTENQ				100
+
+
 typedef struct globalData {
-    int       	socketFd;               /*  connection sockets        */
+    int       	socketFd[LISTENQ];      /*  connection sockets        */
     int       	mainSocket;             /*  listening socket          */
     short int 	port;                   /*  port number               */
     struct    	sockaddr_in servaddr;	/*  socket address structure  */
@@ -41,15 +48,11 @@ typedef struct globalData {
 //pour les tests. a changer
 contextServer ctx;
 
-/*  Global constants  */
-
-#define ECHO_PORT          (2014)
-#define MAX_LINE           (1000)
-#define LISTENQ				100
 
 void doAction(unsigned char* buffer, char** messageToSend);
 void killsrv(int socketFd);
-int analyzeData(contextServer* ctx);
+int analyzeData(contextServer* ctx, int messageSize);
+int initServer();
 
 int main(int argc, char *argv[]) {
 
@@ -58,13 +61,18 @@ int main(int argc, char *argv[]) {
     fd_set read_selector;			 //read selection
     int ret;
     struct timeval timeout;
-
+    int i = 0;
+    int messageSize;
     timeout.tv_sec = 1000;
     timeout.tv_usec = 0;
 
     FD_ZERO(&read_selector);
     /*  Get port number from the command line, and
         set to default port if no arguments were supplied  */
+
+    for(i=0;i<LISTENQ;i++){
+    	ctx.socketFd[i]=-1;
+    }
 
     if ( argc == 2 ) {
 	ctx.port = strtol(argv[1], &endptr, 0);
@@ -125,39 +133,53 @@ int main(int argc, char *argv[]) {
 			if(FD_ISSET(ctx.mainSocket,&read_selector)){ //main socket
 				debugTrace("Select found something to do ...\n");
 				/*  Wait for a connection, then accept() it  */
-				ctx.socketFd = accept(ctx.mainSocket, NULL, NULL);
+				int sock = accept(ctx.mainSocket, NULL, NULL);
 	//    		if ( (ctx.socketFd = accept(ctx.mainSocket, NULL, NULL) ) < 0 ) {
-				if(ctx.socketFd == -1) {
+				if(sock == -1) {
 					fprintf(stderr, "ECHOSERV: Error calling accept()\n%s", strerror(errno));
-					killsrv(ctx.socketFd);
+//					killsrv(ctx.socketFd);
 					exit(EXIT_FAILURE);
 				}
 				debugTrace("New connection established\n");
-				FD_SET(ctx.socketFd,&read_selector);
+
+				for(i=0;i<LISTENQ;i++){
+					if(ctx.socketFd[i] == -1){
+							ctx.socketFd[i]=sock;
+							FD_SET(ctx.socketFd[i],&read_selector);
+							break;
+					}
+				}
 				//stocker les differents FD
 			}
 			else{//client
-				debugTrace("New message incoming");
-				Readline(ctx.socketFd, ctx.messageToReceive, MAX_LINE-1);
-				debugTrace("Reading done");
-				analyzeData(&ctx);
-				debugTrace("Analyse done");
-				ctx.messageToSend = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend)+1);
-				debugTrace("Parsing");
-				Writeline(ctx.socketFd, ctx.messageToSend, strlen(ctx.messageToSend)+1);
-				debugTrace("Message sent : ");
-	//			}
+				for(i=0;i<LISTENQ;i++){
+					if(FD_ISSET(ctx.socketFd[i],&read_selector) && ctx.socketFd[i] != -1){
+						debugTrace("New message incoming");
+						messageSize = Readline(ctx.socketFd[i], ctx.messageToReceive, MAX_LINE-10);
+						if(messageSize < 0){
+							debugTrace("Wrong client");
+							return 0;
+						}
+						debugTrace("Reading done");
+						analyzeData(&ctx,messageSize);
+						debugTrace("Analyse done");
+						ctx.messageToSend = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend)+1);
+						debugTrace("Parsing");
+						Writeline(ctx.socketFd[i], ctx.messageToSend, strlen(ctx.messageToSend)+1);
+						debugTrace("Message sent ");
 
+						/*  Close the connected socket  */
+
+						if ( close(ctx.socketFd[i]) < 0 ) {
+							fprintf(stderr, "ECHOSERV: Error calling close()\n");
+							exit(EXIT_FAILURE);
+							debugTrace("LE CLIENT IS DEAD !\n");
+						}
+					}
+				}
 				/*free mallocs*/
 
-				/*  Close the connected socket  */
-
-				if ( close(ctx.socketFd) < 0 ) {
-					fprintf(stderr, "ECHOSERV: Error calling close()\n");
-					exit(EXIT_FAILURE);
-	//				}
-					debugTrace("LE CLIENT IS DEAD !\n");
-				}
+				printf("FIN\n");
 			}
     	}
     	else{
@@ -189,29 +211,37 @@ void doAction(unsigned char* buffer, char** messageToSend) {
 	}
 }
 
-int analyzeData(contextServer* ctx){
+int analyzeData(contextServer* ctx, int messageSize){
 
-	unsigned char start = ctx->messageToReceive[0];
-	unsigned char size = ctx->messageToReceive[1];
+	if(messageSize < 10000000){//10Mo, msg
+		debugTrace("This is a message");
+		doAction((unsigned char*)ctx->messageToReceive,&(ctx->messageToSend));
+	}
+	else{
+		debugTrace("This is a file");
+	}
 
-	if (start == 0xFE) {
-	//			read(sockd,src,4);
-	//			read(sockd,dst,4);
-	//size in bytes
-		if(size < 10000000){//10Mo, msg
-			debugTrace("You got a message\n");
-			printf("%s\n",ctx->messageToReceive);
-			doAction((unsigned char*)ctx->messageToReceive+2,&(ctx->messageToSend));
-		}
-		else { // files
-			//attention bug ! client envoie coucou trouve un fichier
-			debugTrace("You got a file\n");
-		}
-	}
-	else {
-		debugTrace("This is not a valid sequence\n");
-	}
-	return 1;
+//	unsigned char start = ctx->messageToReceive[0];
+//	unsigned char size = ctx->messageToReceive[1];
+//
+//	if (start == 0xFE) {
+//	//			read(sockd,src,4);
+//	//			read(sockd,dst,4);
+//	//size in bytes
+//		if(size < 10000000){//10Mo, msg
+//			debugTrace("You got a message\n");
+//			printf("%s\n",ctx->messageToReceive);
+//			doAction((unsigned char*)ctx->messageToReceive+2,&(ctx->messageToSend));
+//		}
+//		else { // files
+//			//attention bug ! client envoie coucou trouve un fichier
+//			debugTrace("You got a file\n");
+//		}
+//	}
+//	else {
+//		debugTrace("This is not a valid sequence\n");
+//	}
+//	return 1;
 }
 
 
