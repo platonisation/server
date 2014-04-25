@@ -24,9 +24,9 @@ autre utilisateur
  *
  */
 
-#include "dependencies/communication/communication.h"
+#include <string.h>
 
-#define debugTrace(string) printf("\n%s\n",string);
+#include "dependencies/communication/communication.h"
 
 typedef struct globalData {
     int       	socketFd;               /*  connection sockets        */
@@ -34,7 +34,7 @@ typedef struct globalData {
     short int 	port;                   /*  port number               */
     struct    	sockaddr_in servaddr;	/*  socket address structure  */
     char*		messageToSend;			/* message from server to client*/
-    char*		messageToReceive;		/* message from server to client*/
+    unsigned char*		messageToReceive;		/* message from server to client*/
 
 }contextServer;
 
@@ -47,18 +47,20 @@ contextServer ctx;
 #define MAX_LINE           (1000)
 #define LISTENQ				100
 
-//int Readline(int sockd, char* buffer, size_t maxlen);
-void doAction(char* buffer, int size);
+void doAction(unsigned char* buffer, char** messageToSend);
 void killsrv(int socketFd);
-//ssize_t Writeline(int sockd, const void *vptr, size_t n);
-//char* parseMessage(char* buffer, int size) ;
+int analyzeData(contextServer* ctx);
 
 int main(int argc, char *argv[]) {
 
-    char      buffer[MAX_LINE];      /*  character buffer          */
     char     *endptr;                /*  for strtol()              */
+    ctx.messageToReceive = malloc(sizeof(unsigned char) * MAX_LINE);
     fd_set read_selector;			 //read selection
     int ret;
+    struct timeval timeout;
+
+    timeout.tv_sec = 1000;
+    timeout.tv_usec = 0;
 
     FD_ZERO(&read_selector);
     /*  Get port number from the command line, and
@@ -118,11 +120,10 @@ int main(int argc, char *argv[]) {
 
     while ( 1 ) {
 
-    	ret = select(FD_SETSIZE,&read_selector,(fd_set *)NULL,(fd_set *)NULL,NULL);
+    	ret = select(FD_SETSIZE,&read_selector,(fd_set *)NULL,(fd_set *)NULL,&timeout);
     	if(ret > 0){
 			if(FD_ISSET(ctx.mainSocket,&read_selector)){ //main socket
-				debugTrace("ISSET");
-				printf("ISSET\n");
+				debugTrace("Select found something to do ...\n");
 				/*  Wait for a connection, then accept() it  */
 				ctx.socketFd = accept(ctx.mainSocket, NULL, NULL);
 	//    		if ( (ctx.socketFd = accept(ctx.mainSocket, NULL, NULL) ) < 0 ) {
@@ -131,14 +132,20 @@ int main(int argc, char *argv[]) {
 					killsrv(ctx.socketFd);
 					exit(EXIT_FAILURE);
 				}
+				debugTrace("New connection established\n");
 				FD_SET(ctx.socketFd,&read_selector);
 				//stocker les differents FD
 			}
 			else{//client
+				debugTrace("New message incoming");
 				Readline(ctx.socketFd, ctx.messageToReceive, MAX_LINE-1);
-				ctx.messageToSend = parseMessage(buffer,strlen(buffer));
-				Writeline(ctx.socketFd, ctx.messageToSend, strlen(ctx.messageToSend));
-
+				debugTrace("Reading done");
+				analyzeData(&ctx);
+				debugTrace("Analyse done");
+				ctx.messageToSend = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend)+1);
+				debugTrace("Parsing");
+				Writeline(ctx.socketFd, ctx.messageToSend, strlen(ctx.messageToSend)+1);
+				debugTrace("Message sent : ");
 	//			}
 
 				/*  Close the connected socket  */
@@ -152,34 +159,57 @@ int main(int argc, char *argv[]) {
 			}
     	}
     	else{
-    		debugTrace("toto");
+//    		debugTrace("toto");
     	}
     }
 }
 
 //do something according to buffer's datas
 //commande : PUSH, GET, LIST, CONNECT,
-void doAction(char* buffer,int size) {
-	//char action[1000]={'a',',','b',',','c',',','d'};
-	//strcpy(buffer,action);
+void doAction(unsigned char* buffer, char** messageToSend) {
 
-	printf("My action : %s\n",buffer);
+	const char* help = "Command list :\nhelp\tpush\tget\texit\0";
+	const char* ukCommand = "Unknown command\0";
 
-	//fixme: this function is full of shit
-	char commande[6];
-	memcpy(commande,buffer,5);
-	if(buffer[0] == '?' || (strcmp(commande,"help") == 0)){
-		int len=4;
-		memcpy(buffer,"PUSH",len);
-		buffer[len]='\0';
+	if((strcmp((char*)buffer,"help\n") == 0)){
+		debugTrace("Help");
+		*messageToSend = malloc(sizeof(char)*(strlen(help)+1));
+		strcpy(*messageToSend,help);
 	}
 //	else if(strcmp(buffer,"quit") == 0){
-//		ctx.endConnection = 1;
+////		ctx.endConnection = 1;
+//		strcpy(messageToSend,"Exit understood");
 //	}
 	else{
-		printf("Unknown command\n");
-		memcpy(buffer,"Unknown command",14);
+		debugTrace("UnknownCommand");
+		messageToSend = malloc(sizeof(char)*(strlen(ukCommand)+1));
+		strcpy(*messageToSend,ukCommand);
 	}
+}
+
+int analyzeData(contextServer* ctx){
+
+	unsigned char start = ctx->messageToReceive[0];
+	unsigned char size = ctx->messageToReceive[1];
+
+	if (start == 0xFE) {
+	//			read(sockd,src,4);
+	//			read(sockd,dst,4);
+	//size in bytes
+		if(size < 10000000){//10Mo, msg
+			debugTrace("You got a message\n");
+			printf("%s\n",ctx->messageToReceive);
+			doAction((unsigned char*)ctx->messageToReceive+2,&(ctx->messageToSend));
+		}
+		else { // files
+			//attention bug ! client envoie coucou trouve un fichier
+			debugTrace("You got a file\n");
+		}
+	}
+	else {
+		debugTrace("This is not a valid sequence\n");
+	}
+	return 1;
 }
 
 
