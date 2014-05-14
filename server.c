@@ -152,8 +152,9 @@ int main(int argc, char *argv[]) {
 				//stocker les differents FD
 			}
 			else{//client
+				//effectuer une lecture des FDs avec une rotation sinon c'est toujours le premier client qui aura le token
 				for(i=0;i<LISTENQ;i++){
-					if(FD_ISSET(ctx.socketFd[i],&read_selector) && ctx.socketFd[i] != -1){
+					if(ctx.socketFd[i] != -1 && FD_ISSET(ctx.socketFd[i],&read_selector)){
 						debugTrace("New message incoming");
 						messageSize = Readline(ctx.socketFd[i], ctx.messageToReceive, MAX_LINE-10);
 						if(messageSize < 0){
@@ -165,27 +166,28 @@ int main(int argc, char *argv[]) {
 						debugTrace("Analyse done");
 						ctx.messageToSend = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend)+1);
 						debugTrace("Parsing");
-						Writeline(ctx.socketFd[i], ctx.messageToSend, strlen(ctx.messageToSend)+1);
-						debugTrace("Message sent ");
-
-						/*  Close the connected socket  */
-
-						if ( close(ctx.socketFd[i]) < 0 ) {
-							fprintf(stderr, "ECHOSERV: Error calling close()\n");
-							exit(EXIT_FAILURE);
-							debugTrace("LE CLIENT IS DEAD !\n");
-						}
+						Writeline(ctx.socketFd[i], ctx.messageToSend, strlen(ctx.messageToSend));
+						debugTrace("Message sent\n");
 					}
 				}
 				/*free mallocs*/
 
-				printf("FIN\n");
+				printf("Over\n");
 			}
     	}
     	else{
 //    		debugTrace("toto");
     	}
     }
+    /*  Close the connected socket  */
+    for(i=0;i<LISTENQ;i++){
+    	if ( close(ctx.socketFd[i]) < 0 ) {
+			fprintf(stderr, "ECHOSERV: Error calling close()\n");
+			exit(EXIT_FAILURE);
+			debugTrace("LE CLIENT IS DEAD !\n");
+		}
+    }
+
 }
 
 //do something according to buffer's datas
@@ -200,13 +202,15 @@ void doAction(unsigned char* buffer, char** messageToSend) {
 		*messageToSend = malloc(sizeof(char)*(strlen(help)+1));
 		strcpy(*messageToSend,help);
 	}
-//	else if(strcmp(buffer,"quit") == 0){
-////		ctx.endConnection = 1;
-//		strcpy(messageToSend,"Exit understood");
+//	else if(strcmp((char*)buffer,"quit\n") == 0){
+//		ctx.endConnection = 1;
+//		strcpy(messageToSend,"Close connection");
+//		debugTrace("Terminate connection with client");
+//		exit(0);
 //	}
 	else{
 		debugTrace("UnknownCommand");
-		messageToSend = malloc(sizeof(char)*(strlen(ukCommand)+1));
+		*messageToSend = malloc(sizeof(char)*(strlen(ukCommand)+1));
 		strcpy(*messageToSend,ukCommand);
 	}
 }
