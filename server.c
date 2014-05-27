@@ -34,28 +34,35 @@ autre utilisateur
 #define MAX_LINE           (1000)
 #define LISTENQ				100
 
+typedef struct usersDatas {
+	char	name[MAX_USR_LENGTH];
+	int 	group;
+	int 	rights;
+}userDatas;
 
 typedef struct globalData {
-    int       	socketFd[LISTENQ];      /*  connection sockets        */
-    int       	mainSocket;             /*  listening socket          */
-    short int 	port;                   /*  port number               */
-    struct    	sockaddr_in servaddr;	/*  socket address structure  */
-    char*		messageToSend;			/* message from server to client*/
-    char* 		parsedMessage;
+    int       			socketFd[LISTENQ];      /*  connection sockets        */
+    int       			mainSocket;             /*  listening socket          */
+    short int 			port;                   /*  port number               */
+    struct    			sockaddr_in servaddr;	/*  socket address structure  */
+    char*				messageToSend;			/* message from server to client*/
+    char* 				parsedMessage;
     unsigned char*		messageToReceive;		/* message from server to client*/
+
 
 }contextServer;
 
 //pour les tests. a changer
 contextServer ctx;
-
+userDatas usrDatas[LISTENQ];
 
 char* doAction(unsigned char* buffer, char* messageToSend);
-void killsrv(int socketFd);
+void killsrv();
+void setUserDatas(int id);
 int isFile(int messageSize);
 void deconnectClient(int sockd);
 int initServer(int argc, char** argv);
-void sendAll(char* message);
+void sendAll(unsigned char* message);
 void printError(int err);
 
 int main(int argc, char *argv[]) {
@@ -89,7 +96,6 @@ int main(int argc, char *argv[]) {
 				debugTrace("New connection detected\n");
 				/*  Wait for a connection, then accept() it  */
 				int sock = accept(ctx.mainSocket, NULL, NULL);
-	//    		if ( (ctx.socketFd = accept(ctx.mainSocket, NULL, NULL) ) < 0 ) {
 				if(sock == -1) {
 					fprintf(stderr, "ECHOSERV: Error calling accept()\n%s", strerror(errno));
 //					killsrv(ctx.socketFd);
@@ -101,6 +107,7 @@ int main(int argc, char *argv[]) {
 					if(ctx.socketFd[i] == -1){
 							ctx.socketFd[i]=sock;
 							FD_SET(ctx.socketFd[i],&read_selector);
+							setUserDatas(i);
 							break;
 					}
 				}
@@ -125,7 +132,7 @@ int main(int argc, char *argv[]) {
 						else {
 							// treat files
 						}
-						debugTrace("Analyse done");
+						debugTrace("Analyze done");
 						ctx.parsedMessage = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend));
 						debugTrace("Parsing");
 						printf("msg : %s\n",ctx.parsedMessage);
@@ -134,12 +141,8 @@ int main(int argc, char *argv[]) {
 						}
 						else
 							debugTrace("Message sent\n");
-
-//						free(ctx.parsedMessage);
 					}
 				}
-				/*free mallocs*/
-
 				printf("Over\n");
 			}
     	}
@@ -193,13 +196,13 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 	}
 }
 
-void sendAll(char* message){
+void sendAll(unsigned char* message){
 
 	int i = 0;
 	char* buf;
 	for(i=0;i<LISTENQ;i++){
 		if(ctx.socketFd[i] != -1){
-			buf = parseMessage(message,strlen(message));
+			buf = parseMessage((char*)message,strlen((char*)message));
 			if (Writeline(ctx.socketFd[i], buf, strlen(buf)+1) < 0){
 				debugTrace("Message issue");
 			}
@@ -252,6 +255,29 @@ void deconnectClient(int sockd){
 	}
 }
 
+void setUserDatas(int id){
+	char* buf = malloc(sizeof(char)*(MAX_USR_LENGTH + 4)); //+4 : <name(10 characters)> + < > + <group> + < > + <rights>
+	int size = Readline(ctx.socketFd[id], buf, MAX_LINE-10);
+	int sizeName = strlen(buf)-4;
+	printf("Myname : %s\n",buf);
+	if(size > 0){
+		printf("In size\n");
+		strncpy(usrDatas[id].name,buf,sizeName);
+		buf+=sizeName;
+		printf("In group : %c\n",buf[0]);
+		usrDatas[id].group = buf[0];
+		buf+=2; //blankspace
+		printf("in right: %c\n",buf[0]);
+		usrDatas[id].rights = buf[0];
+	}
+	else {
+		strcpy(usrDatas[id].name,"User");
+		usrDatas[id].rights = 0;
+		usrDatas[id].group = 0;
+	}
+	printf("%s is my name read from the srv\n",usrDatas[id].name);
+}
+
 int initServer(int argc, char** argv){
 	int i;
 	char     *endptr;                /*  for strtol()              */
@@ -285,9 +311,12 @@ int initServer(int argc, char** argv){
     /*  Create the listening socket  */
 
     if ( (ctx.mainSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
-	fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
-	exit(EXIT_FAILURE);
+		fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
+		exit(EXIT_FAILURE);
     }
+
+    int optval = 1;
+    setsockopt(ctx.mainSocket,SOL_SOCKET,SO_REUSEADDR,&optval,sizeof(optval));
 
     /*  Set all bytes in socket address structure to
         zero, and fill in the relevant data members   */
@@ -302,15 +331,14 @@ int initServer(int argc, char** argv){
 	listening socket, and call listen()  */
 
     if ( bind(ctx.mainSocket, (struct sockaddr *) &(ctx.servaddr), sizeof(ctx.servaddr)) < 0 ) {
-	fprintf(stderr, "ECHOSERV: Error calling bind()\n");
-	exit(EXIT_FAILURE);
+		fprintf(stderr, "ECHOSERV: Error calling bind()\n");
+		exit(EXIT_FAILURE);
     }
 
     if ( listen(ctx.mainSocket, LISTENQ) < 0 ) {
-	fprintf(stderr, "ECHOSERV: Error calling listen()\n");
-	exit(EXIT_FAILURE);
+		fprintf(stderr, "ECHOSERV: Error calling listen()\n");
+		exit(EXIT_FAILURE);
     }
-
 }
 
 void printError(int err){
@@ -327,9 +355,13 @@ void printError(int err){
 	}
 }
 
-void killsrv(int socketFd){
-	if ( close(socketFd) < 0 ) {
-		    fprintf(stderr, "ECHOSERV: Error calling close()\n");
-		    exit(EXIT_FAILURE);
-	}
+void killsrv(){
+//	int i = 0;
+//	for(i = 0; i < LISTENQ ; i++){
+//		if(close(ctx.socketFd[i]) < 0){
+//		    fprintf(stderr, "ECHOSERV: Error calling close()\n");
+//		    exit(EXIT_FAILURE);
+//		}
+//	}
+//	exit(EXIT_SUCCESS);
 }
