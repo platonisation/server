@@ -140,7 +140,6 @@ int main(int argc, char *argv[]) {
     	FD_SET(ctx.mainSocket,&read_selector);
     	for(i=0;i<LISTENQ;i++){
 			if(ctx.socketFd[i] != -1){
-				printf("%d cleint\n",i);
 				FD_SET(ctx.socketFd[i],&read_selector);
 			}
 		}
@@ -227,8 +226,9 @@ int main(int argc, char *argv[]) {
 //commande : PUSH, GET, LIST, CONNECT,
 char* doAction(unsigned char* buffer, char* messageToSend) {
 
-	char* help = "Command list :\nhelp\tpush\tget\texit";
+	char* help = "Command list :\nhelp\tsend\tpush\tget\texit";
 	char* ukCommand = "Unknown command";
+	char* receptionOk = "Well received";
 
 	if((strcmp((char*)buffer,"help\n") == 0)){
 		debugTrace("Help");
@@ -236,12 +236,10 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 //		strcpy(*messageToSend,help);
 		return help;
 	}
-//	else if(strcmp((char*)buffer,"quit\n") == 0){
-//		ctx.endConnection = 1;
-//		strcpy(messageToSend,"Close connection");
-//		debugTrace("Terminate connection with client");
-//		exit(0);
-//	}
+	else if(strstr((char*)buffer,"send") != NULL){  //command exemple : send coco channel
+		buffer+=4; //glide pointer to message
+		return receptionOk;
+	}
 	else{
 		debugTrace("UnknownCommand");
 //		printf("%s\n",buffer);
