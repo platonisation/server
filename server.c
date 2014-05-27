@@ -52,9 +52,10 @@ contextServer ctx;
 
 char* doAction(unsigned char* buffer, char* messageToSend);
 void killsrv(int socketFd);
-int analyzeData(contextServer* ctx, int messageSize);
+int isFile(int messageSize);
 void deconnectClient(int sockd);
 int initServer();
+void sendAll(char* message);
 void printError(int err);
 
 int main(int argc, char *argv[]) {
@@ -180,7 +181,7 @@ int main(int argc, char *argv[]) {
 //							FD_CLR() clear le fd
 						}
 						debugTrace("Reading done");
-						if(analyzeData(&ctx,messageSize) == 1){
+						if(isFile(messageSize) == 1){
 							ctx.messageToSend = doAction((unsigned char*)ctx.messageToReceive,ctx.messageToSend);
 						}
 						else {
@@ -237,7 +238,12 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 		return help;
 	}
 	else if(strstr((char*)buffer,"send") != NULL){  //command exemple : send coco channel
-		buffer+=4; //glide pointer to message
+		buffer+=5; //glide pointer to message (send ) carefull, dont forget the blankspace
+		if(buffer[0] == '-' && buffer[1] == 'a'){
+			buffer+=2;
+			debugTrace("Sending to everyone");
+			sendAll(buffer);
+		}
 		return receptionOk;
 	}
 	else{
@@ -249,7 +255,24 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 	}
 }
 
-int analyzeData(contextServer* ctx, int messageSize){
+void sendAll(char* message){
+
+	int i = 0;
+	char* buf;
+	for(i=0;i<LISTENQ;i++){
+		if(ctx.socketFd[i] != -1){
+			buf = parseMessage(message,strlen(message));
+			if (Writeline(ctx.socketFd[i], buf, strlen(buf)+1) < 0){
+				debugTrace("Message issue");
+			}
+			else {
+				debugTrace("Message sent\n");
+			}
+		}
+	}
+}
+
+int isFile(int messageSize){
 
 	if(messageSize < 10000000){//10Mo, msg
 		debugTrace("This is a message");
