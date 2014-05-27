@@ -54,81 +54,18 @@ char* doAction(unsigned char* buffer, char* messageToSend);
 void killsrv(int socketFd);
 int isFile(int messageSize);
 void deconnectClient(int sockd);
-int initServer();
+int initServer(int argc, char** argv);
 void sendAll(char* message);
 void printError(int err);
 
 int main(int argc, char *argv[]) {
 
-	ctx.messageToReceive = NULL;
-	ctx.messageToSend = NULL;
-	ctx.parsedMessage =NULL;
-
-
-    char     *endptr;                /*  for strtol()              */
-    ctx.messageToReceive = malloc(sizeof(unsigned char) * MAX_LINE);
     fd_set read_selector;			 //read selection
     int ret;
     int i = 0;
     int messageSize;
 
-    FD_ZERO(&read_selector);
-    /*  Get port number from the command line, and
-        set to default port if no arguments were supplied  */
-
-    for(i=0;i<LISTENQ;i++){
-    	ctx.socketFd[i]=-1;
-    }
-
-    if ( argc == 2 ) {
-	ctx.port = strtol(argv[1], &endptr, 0);
-		if ( *endptr ) {
-			fprintf(stderr, "ECHOSERV: Invalid port number.\n");
-			exit(EXIT_FAILURE);
-		}
-    }
-    else if ( argc < 2 ) {
-    	ctx.port = ECHO_PORT;
-    }
-    else {
-		fprintf(stderr, "ECHOSERV: Invalid arguments.\n");
-		exit(EXIT_FAILURE);
-    }
-
-
-    /*  Create the listening socket  */
-
-    if ( (ctx.mainSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
-	fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
-	exit(EXIT_FAILURE);
-    }
-
-
-    /* Remember the main socket */
-    FD_SET(ctx.mainSocket,&read_selector);
-
-    /*  Set all bytes in socket address structure to
-        zero, and fill in the relevant data members   */
-
-    memset(&(ctx.servaddr), 0, sizeof(ctx.servaddr));
-    ctx.servaddr.sin_family      = AF_INET;
-    ctx.servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    ctx.servaddr.sin_port        = htons(ctx.port);
-
-
-    /*  Bind our socket address to the
-	listening socket, and call listen()  */
-
-    if ( bind(ctx.mainSocket, (struct sockaddr *) &(ctx.servaddr), sizeof(ctx.servaddr)) < 0 ) {
-	fprintf(stderr, "ECHOSERV: Error calling bind()\n");
-	exit(EXIT_FAILURE);
-    }
-
-    if ( listen(ctx.mainSocket, LISTENQ) < 0 ) {
-	fprintf(stderr, "ECHOSERV: Error calling listen()\n");
-	exit(EXIT_FAILURE);
-    }
-
+    initServer(argc, argv);
 
     /*  Enter an infinite loop to respond
         to client requests and echo input  */
@@ -138,6 +75,7 @@ int main(int argc, char *argv[]) {
     	FD_ZERO(&read_selector);
 //    	Update FD's : En sortie, les ensembles sont modifiés pour  indiquer  les
 //    	descripteurs qui ont changé de statut.
+    	 /* Remember the main socket */
     	FD_SET(ctx.mainSocket,&read_selector);
     	for(i=0;i<LISTENQ;i++){
 			if(ctx.socketFd[i] != -1){
@@ -270,6 +208,7 @@ void sendAll(char* message){
 			}
 		}
 	}
+	free(buf);
 }
 
 int isFile(int messageSize){
@@ -311,6 +250,67 @@ void deconnectClient(int sockd){
 //do something
 		debugTrace("FAIL DECONNECTING CLIENT");
 	}
+}
+
+int initServer(int argc, char** argv){
+	int i;
+	char     *endptr;                /*  for strtol()              */
+
+	ctx.messageToReceive = NULL;
+	ctx.messageToSend = NULL;
+	ctx.parsedMessage =NULL;
+	ctx.messageToReceive = malloc(sizeof(unsigned char) * MAX_LINE);
+
+    for(i=0;i<LISTENQ;i++){
+    	ctx.socketFd[i]=-1;
+    }
+
+    /*  Get port number from the command line, and
+            set to default port if no arguments were supplied  */
+    if ( argc == 2 ) {
+	ctx.port = strtol(argv[1], &endptr, 0);
+		if ( *endptr ) {
+			fprintf(stderr, "ECHOSERV: Invalid port number.\n");
+			exit(EXIT_FAILURE);
+		}
+    }
+    else if ( argc < 2 ) {
+    	ctx.port = ECHO_PORT;
+    }
+    else {
+		fprintf(stderr, "ECHOSERV: Invalid arguments.\n");
+		exit(EXIT_FAILURE);
+    }
+
+    /*  Create the listening socket  */
+
+    if ( (ctx.mainSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0 ) {
+	fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
+	exit(EXIT_FAILURE);
+    }
+
+    /*  Set all bytes in socket address structure to
+        zero, and fill in the relevant data members   */
+
+    memset(&(ctx.servaddr), 0, sizeof(ctx.servaddr));
+    ctx.servaddr.sin_family      = AF_INET;
+    ctx.servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    ctx.servaddr.sin_port        = htons(ctx.port);
+
+
+    /*  Bind our socket address to the
+	listening socket, and call listen()  */
+
+    if ( bind(ctx.mainSocket, (struct sockaddr *) &(ctx.servaddr), sizeof(ctx.servaddr)) < 0 ) {
+	fprintf(stderr, "ECHOSERV: Error calling bind()\n");
+	exit(EXIT_FAILURE);
+    }
+
+    if ( listen(ctx.mainSocket, LISTENQ) < 0 ) {
+	fprintf(stderr, "ECHOSERV: Error calling listen()\n");
+	exit(EXIT_FAILURE);
+    }
+
 }
 
 void printError(int err){
