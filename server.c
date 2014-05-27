@@ -53,6 +53,7 @@ contextServer ctx;
 char* doAction(unsigned char* buffer, char* messageToSend);
 void killsrv(int socketFd);
 int analyzeData(contextServer* ctx, int messageSize);
+void deconnectClient(int sockd);
 int initServer();
 void printError(int err);
 
