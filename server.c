@@ -102,6 +102,7 @@ int main(int argc, char *argv[]) {
 	exit(EXIT_FAILURE);
     }
 
+
     /* Remember the main socket */
     FD_SET(ctx.mainSocket,&read_selector);
 
