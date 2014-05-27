@@ -132,20 +132,21 @@ int main(int argc, char *argv[]) {
 
     while ( 1 ) {
 
+    	FD_ZERO(&read_selector);
 //    	Update FD's : En sortie, les ensembles sont modifiés pour  indiquer  les
 //    	descripteurs qui ont changé de statut.
     	FD_SET(ctx.mainSocket,&read_selector);
     	for(i=0;i<LISTENQ;i++){
 			if(ctx.socketFd[i] != -1){
+				printf("%d cleint\n",i);
 				FD_SET(ctx.socketFd[i],&read_selector);
-				break;
 			}
 		}
 
     	ret = select(FD_SETSIZE,&read_selector,(fd_set *)NULL,(fd_set *)NULL,NULL);
     	if(ret > 0){
 			if(FD_ISSET(ctx.mainSocket,&read_selector)){ //main socket
-				debugTrace("Select found something to do ...\n");
+				debugTrace("New connection detected\n");
 				/*  Wait for a connection, then accept() it  */
 				int sock = accept(ctx.mainSocket, NULL, NULL);
 	//    		if ( (ctx.socketFd = accept(ctx.mainSocket, NULL, NULL) ) < 0 ) {
@@ -163,7 +164,6 @@ int main(int argc, char *argv[]) {
 							break;
 					}
 				}
-				//stocker les differents FD
 			}
 			else{//client
 				//effectuer une lecture des FDs avec une rotation sinon c'est toujours le premier client qui aura le token
@@ -174,7 +174,9 @@ int main(int argc, char *argv[]) {
 						messageSize = Readline(ctx.socketFd[i], ctx.messageToReceive, MAX_LINE-10);
 						if(messageSize <= 0){
 							printError(messageSize);
-							return 0;
+							deconnectClient(ctx.socketFd[i]);
+							ctx.socketFd[i] = -1;
+//							FD_CLR() clear le fd
 						}
 						debugTrace("Reading done");
 						if(analyzeData(&ctx,messageSize) == 1){
@@ -193,7 +195,7 @@ int main(int argc, char *argv[]) {
 						else
 							debugTrace("Message sent\n");
 
-						free(ctx.parsedMessage);
+//						free(ctx.parsedMessage);
 					}
 				}
 				/*free mallocs*/
@@ -279,6 +281,13 @@ int analyzeData(contextServer* ctx, int messageSize){
 //		debugTrace("This is not a valid sequence\n");
 //	}
 //	return 1;
+}
+
+void deconnectClient(int sockd){
+	if(close(sockd) != 0){
+//do something
+		debugTrace("FAIL DECONNECTING CLIENT");
+	}
 }
 
 void printError(int err){
