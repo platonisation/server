@@ -41,7 +41,6 @@ typedef struct globalData {
     short int 	port;                   /*  port number               */
     struct    	sockaddr_in servaddr;	/*  socket address structure  */
     char*		messageToSend;			/* message from server to client*/
-    char* 		parsedMessage;
     unsigned char*		messageToReceive;		/* message from server to client*/
 
 }contextServer;
@@ -50,26 +49,22 @@ typedef struct globalData {
 contextServer ctx;
 
 
-char* doAction(unsigned char* buffer, char* messageToSend);
+void doAction(unsigned char* buffer, char** messageToSend);
 void killsrv(int socketFd);
 int analyzeData(contextServer* ctx, int messageSize);
-void deconnectClient(int sockd);
 int initServer();
-void printError(int err);
 
 int main(int argc, char *argv[]) {
-
-	ctx.messageToReceive = NULL;
-	ctx.messageToSend = NULL;
-	ctx.parsedMessage =NULL;
-
 
     char     *endptr;                /*  for strtol()              */
     ctx.messageToReceive = malloc(sizeof(unsigned char) * MAX_LINE);
     fd_set read_selector;			 //read selection
     int ret;
+    struct timeval timeout;
     int i = 0;
     int messageSize;
+    timeout.tv_sec = 1000;
+    timeout.tv_usec = 0;
 
     FD_ZERO(&read_selector);
     /*  Get port number from the command line, and
@@ -131,24 +126,12 @@ int main(int argc, char *argv[]) {
     /*  Enter an infinite loop to respond
         to client requests and echo input  */
 
-    while ( 1 ) {
+    while(1){
 
-    	FD_ZERO(&read_selector);
-//    	Update FD's : En sortie, les ensembles sont modifiés pour  indiquer  les
-//    	descripteurs qui ont changé de statut.
-    	FD_SET(ctx.mainSocket,&read_selector);
-    	for(i=0;i<LISTENQ;i++){
-			if(ctx.socketFd[i] != -1){
-				printf("%d cleint\n",i);
-				FD_SET(ctx.socketFd[i],&read_selector);
-			}
-		}
-
-    	ret = select(FD_SETSIZE,&read_selector,(fd_set *)NULL,(fd_set *)NULL,NULL);
-    	if(ret > 0){
+    	ret = select(FD_SETSIZE,&read_selector,(fd_set *)NULL,(fd_set *)NULL,&timeout);
+    	if(ret > 0){											// un événement a été reçu par un read selector
 			if(FD_ISSET(ctx.mainSocket,&read_selector)){ //main socket
-				debugTrace("New connection detected\n");
-				/*  Wait for a connection, then accept() it  */
+				debugTrace("Select found something to do ...\n");
 				int sock = accept(ctx.mainSocket, NULL, NULL);
 	//    		if ( (ctx.socketFd = accept(ctx.mainSocket, NULL, NULL) ) < 0 ) {
 				if(sock == -1) {
@@ -159,44 +142,31 @@ int main(int argc, char *argv[]) {
 				debugTrace("New connection established\n");
 
 				for(i=0;i<LISTENQ;i++){
-					if(ctx.socketFd[i] == -1){
+					if(ctx.socketFd[i] == -1){		//Le socket est libre
 							ctx.socketFd[i]=sock;
-							FD_SET(ctx.socketFd[i],&read_selector);
+							FD_SET(ctx.socketFd[i],&read_selector); //On l'ajoute en écoute
 							break;
 					}
 				}
+				//stocker les differents FD
 			}
-			else{//client
+			else{//un des clients
 				//effectuer une lecture des FDs avec une rotation sinon c'est toujours le premier client qui aura le token
-//				i = ((i+1) % LISTENQ);
 				for(i=0;i<LISTENQ;i++){
 					if(ctx.socketFd[i] != -1 && FD_ISSET(ctx.socketFd[i],&read_selector)){
 						debugTrace("New message incoming");
 						messageSize = Readline(ctx.socketFd[i], ctx.messageToReceive, MAX_LINE-10);
-						if(messageSize <= 0){
-							printError(messageSize);
-							deconnectClient(ctx.socketFd[i]);
-							ctx.socketFd[i] = -1;
-//							FD_CLR() clear le fd
+						if(messageSize < 0){
+							debugTrace("Wrong client");
+							return 0;
 						}
 						debugTrace("Reading done");
-						if(analyzeData(&ctx,messageSize) == 1){
-							ctx.messageToSend = doAction((unsigned char*)ctx.messageToReceive,ctx.messageToSend);
-						}
-						else {
-							// treat files
-						}
+						analyzeData(&ctx,messageSize);
 						debugTrace("Analyse done");
-						ctx.parsedMessage = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend));
+						ctx.messageToSend = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend)+1);
 						debugTrace("Parsing");
-						printf("msg : %s\n",ctx.parsedMessage);
-						if (Writeline(ctx.socketFd[i], ctx.parsedMessage, strlen(ctx.parsedMessage)+1) < 0){
-							debugTrace("Message issue");
-						}
-						else
-							debugTrace("Message sent\n");
-
-//						free(ctx.parsedMessage);
+						Writeline(ctx.socketFd[i], ctx.messageToSend, strlen(ctx.messageToSend));
+						debugTrace("Message sent\n");
 					}
 				}
 				/*free mallocs*/
@@ -205,12 +175,9 @@ int main(int argc, char *argv[]) {
 			}
     	}
     	else{
-    		debugTrace("nothing to read");
+//    		debugTrace("toto");
     	}
     }
-
-    free(ctx.messageToReceive);
-
     /*  Close the connected socket  */
     for(i=0;i<LISTENQ;i++){
     	if ( close(ctx.socketFd[i]) < 0 ) {
@@ -224,16 +191,15 @@ int main(int argc, char *argv[]) {
 
 //do something according to buffer's datas
 //commande : PUSH, GET, LIST, CONNECT,
-char* doAction(unsigned char* buffer, char* messageToSend) {
+void doAction(unsigned char* buffer, char** messageToSend) {
 
-	char* help = "Command list :\nhelp\tpush\tget\texit";
-	char* ukCommand = "Unknown command";
+	const char* help = "Command list :\nhelp\tpush\tget\texit\0";
+	const char* ukCommand = "Unknown command\0";
 
 	if((strcmp((char*)buffer,"help\n") == 0)){
 		debugTrace("Help");
-//		*messageToSend = malloc(sizeof(char)*((strlen(help)) + 1));
-//		strcpy(*messageToSend,help);
-		return help;
+		*messageToSend = malloc(sizeof(char)*(strlen(help)+1));
+		strcpy(*messageToSend,help);
 	}
 //	else if(strcmp((char*)buffer,"quit\n") == 0){
 //		ctx.endConnection = 1;
@@ -243,10 +209,8 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 //	}
 	else{
 		debugTrace("UnknownCommand");
-//		printf("%s\n",buffer);
-//		*messageToSend = malloc(sizeof(char)*((strlen(ukCommand) + 1)));
-//		strcpy(*messageToSend,ukCommand);
-		return ukCommand;
+		*messageToSend = malloc(sizeof(char)*(strlen(ukCommand)+1));
+		strcpy(*messageToSend,ukCommand);
 	}
 }
 
@@ -254,11 +218,10 @@ int analyzeData(contextServer* ctx, int messageSize){
 
 	if(messageSize < 10000000){//10Mo, msg
 		debugTrace("This is a message");
-		return 1;
+		doAction((unsigned char*)ctx->messageToReceive,&(ctx->messageToSend));
 	}
 	else{
 		debugTrace("This is a file");
-		return 2;
 	}
 
 //	unsigned char start = ctx->messageToReceive[0];
@@ -284,26 +247,6 @@ int analyzeData(contextServer* ctx, int messageSize){
 //	return 1;
 }
 
-void deconnectClient(int sockd){
-	if(close(sockd) != 0){
-//do something
-		debugTrace("FAIL DECONNECTING CLIENT");
-	}
-}
-
-void printError(int err){
-	switch(err){
-		case 0:
-			debugTrace("Nothing to read, timeout");
-		break;
-		case -1:
-			debugTrace("Known error");
-		break;
-		case -2:
-			debugTrace("Is this possible ?");
-		break;
-	}
-}
 
 void killsrv(int socketFd){
 	if ( close(socketFd) < 0 ) {
