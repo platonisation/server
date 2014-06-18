@@ -79,16 +79,16 @@ int main(int argc, char *argv[]) {
 
     while ( 1 ) {
 
-    	FD_ZERO(&read_selector);
-//    	Update FD's : En sortie, les ensembles sont modifiés pour  indiquer  les
-//    	descripteurs qui ont changé de statut.
+        FD_ZERO(&read_selector);
+    //    	Update FD's : En sortie, les ensembles sont modifiés pour  indiquer  les
+    //    	descripteurs qui ont changé de statut.
     	 /* Remember the main socket */
-    	FD_SET(ctx.mainSocket,&read_selector);
+        FD_SET(ctx.mainSocket,&read_selector);
     	for(i=0;i<LISTENQ;i++){
-			if(ctx.socketFd[i] != -1){
-				FD_SET(ctx.socketFd[i],&read_selector);
-			}
-		}
+    		if(ctx.socketFd[i] != -1){
+    			FD_SET(ctx.socketFd[i],&read_selector);
+    		}
+    	}
 
     	ret = select(FD_SETSIZE,&read_selector,(fd_set *)NULL,(fd_set *)NULL,NULL);
     	if(ret > 0){
@@ -142,6 +142,7 @@ int main(int argc, char *argv[]) {
 						}
 						else
 							debugTrace("Message sent\n");
+//						FD_CLR(ctx.socketFd[i],&active_read_selector);
 					}
 				}
 				printf("Over\n");
@@ -201,9 +202,10 @@ void sendAll(unsigned char* message){
 
 	int i = 0;
 	char* buf;
+	buf = parseMessage((char*)message,strlen((char*)message));
 	for(i=0;i<LISTENQ;i++){
 		if(ctx.socketFd[i] != -1){
-			buf = parseMessage((char*)message,strlen((char*)message));
+			printf("Envoie au client : %d\n",i);
 			if (Writeline(ctx.socketFd[i], buf, strlen(buf)+1) < 0){
 				debugTrace("Message issue");
 			}
