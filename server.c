@@ -134,14 +134,18 @@ int main(int argc, char *argv[]) {
 							// treat files
 						}
 						debugTrace("Analyze done");
-						ctx.parsedMessage = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend));
-						debugTrace("Parsing");
-						printf("msg : %s\n",ctx.parsedMessage);
-//						if (Writeline(ctx.socketFd[i], ctx.parsedMessage, strlen(ctx.parsedMessage)+1) < 0){
-//							debugTrace("Message issue");
-//						}
-//						else
-//							debugTrace("Message sent\n");
+						//Le message a déjà été envoyé
+						if(strcmp(ctx.messageToSend,"sentToALl")){
+							ctx.parsedMessage = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend));
+							debugTrace("Parsing");
+							printf("msg : %s\n",ctx.parsedMessage);
+							if (Writeline(ctx.socketFd[i], ctx.parsedMessage, strlen(ctx.parsedMessage)+1) < 0){
+								debugTrace("Message issue");
+							}
+							else
+								debugTrace("Message sent\n");
+						}
+
 //						FD_CLR(ctx.socketFd[i],&active_read_selector);
 					}
 				}
@@ -173,6 +177,7 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 	char* help = "Command list :\nhelp\tsend\tpush\tget\texit";
 	char* ukCommand = "Unknown command";
 	char* receptionOk = "Well received";
+	char* sentToAll = "sentToALl";
 
 	if((strcmp((char*)buffer,"help\n") == 0)){
 		debugTrace("Help");
@@ -186,6 +191,7 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 			buffer+=2;
 			debugTrace("Sending to everyone");
 			sendAll(buffer);
+			return sentToAll;
 		}
 		return receptionOk;
 	}
@@ -202,9 +208,15 @@ void sendAll(unsigned char* message){
 
 	int i = 0;
 	char* buf;
-	buf = parseMessage((char*)message,strlen((char*)message));
+	int size = strlen((char*)message)+MAX_USR_LENGTH + 20;
+	char tmp[size];
+	memset(tmp,0,size);
 	for(i=0;i<LISTENQ;i++){
 		if(ctx.socketFd[i] != -1){
+			strcat(tmp,usrDatas[i].name);
+			strcat(tmp," : ");
+			strcat(tmp,(char*)message);
+			buf = parseMessage(tmp,strlen(tmp));
 			printf("Envoie au client : %d\n",i);
 			if (Writeline(ctx.socketFd[i], buf, strlen(buf)+1) < 0){
 				debugTrace("Message issue");
