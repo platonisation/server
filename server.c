@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
 					if(ctx.socketFd[i] != -1 && FD_ISSET(ctx.socketFd[i],&read_selector)){
 						debugTrace("New message incoming");
 						messageSize = Readline(ctx.socketFd[i], ctx.messageToReceive, MAX_LINE-10);
-						if(messageSize <= 0){
+						if(messageSize < 0){
 							printError(messageSize);
 							deconnectClient(ctx.socketFd[i]);
 							ctx.socketFd[i] = -1;
@@ -137,11 +137,11 @@ int main(int argc, char *argv[]) {
 						ctx.parsedMessage = parseMessage(ctx.messageToSend,strlen(ctx.messageToSend));
 						debugTrace("Parsing");
 						printf("msg : %s\n",ctx.parsedMessage);
-						if (Writeline(ctx.socketFd[i], ctx.parsedMessage, strlen(ctx.parsedMessage)+1) < 0){
-							debugTrace("Message issue");
-						}
-						else
-							debugTrace("Message sent\n");
+//						if (Writeline(ctx.socketFd[i], ctx.parsedMessage, strlen(ctx.parsedMessage)+1) < 0){
+//							debugTrace("Message issue");
+//						}
+//						else
+//							debugTrace("Message sent\n");
 //						FD_CLR(ctx.socketFd[i],&active_read_selector);
 					}
 				}
