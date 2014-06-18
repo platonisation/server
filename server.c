@@ -123,6 +123,7 @@ int main(int argc, char *argv[]) {
 							printError(messageSize);
 							deconnectClient(ctx.socketFd[i]);
 							ctx.socketFd[i] = -1;
+							break;
 //							FD_CLR() clear le fd
 						}
 						debugTrace("Reading done");
