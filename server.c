@@ -64,6 +64,7 @@ void deconnectClient(int sockd);
 int initServer(int argc, char** argv);
 void sendAll(unsigned char* message, int actuel);
 void printError(int err);
+void sendFileTo(char* message, int to, int from);
 
 int main(int argc, char *argv[]) {
 
@@ -128,12 +129,12 @@ int main(int argc, char *argv[]) {
 //							FD_CLR() clear le fd
 						}
 						debugTrace("Reading done");
-						if(isFile(messageSize) == 1){
+//						if(isFile(messageSize) == 1){
 							ctx.messageToSend = doAction((unsigned char*)ctx.messageToReceive,ctx.messageToSend,i);
-						}
-						else {
+//						}
+//						else {
 							// treat files
-						}
+//						}
 						debugTrace("Analyze done");
 						//Le message a déjà été envoyé
 						if(strcmp(ctx.messageToSend,"sentToALl")){
@@ -175,10 +176,12 @@ int main(int argc, char *argv[]) {
 //commande : PUSH, GET, LIST, CONNECT,
 char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 
-	char* help = "Command list :\nhelp\tsend\tpush\tget\texit";
+	char* help = "Command list :\nhelp\tsend\tpush\texit";
 	char* ukCommand = "Unknown command";
 	char* receptionOk = "Well received";
 	char* sentToAll = "sentToALl";
+	char* push = "pushed";
+	char* failed = "failed";
 	int i = 0;
 
 	if((strcmp((char*)buffer,"help\n") == 0)){
@@ -186,6 +189,22 @@ char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 //		*messageToSend = malloc(sizeof(char)*((strlen(help)) + 1));
 //		strcpy(*messageToSend,help);
 		return help;
+	}
+	else if(strstr((char*)buffer,"push") != NULL){
+		debugTrace("push");
+		buffer+=5;
+		char* name;
+		char* sv;
+		name = strtok_r((char*)buffer," ",&sv);
+		for(i=0;i<LISTENQ;i++){
+			if(!strcmp(name,usrDatas[i].name)){
+				sendFileTo(sv,i,actuel);
+				return push;
+			}
+		}
+//		*messageToSend = malloc(sizeof(char)*((strlen(help)) + 1));
+//		strcpy(*messageToSend,help);
+		return failed;//NON
 	}
 	else if(strstr((char*)buffer,"send") != NULL){  //command exemple : send coco channel
 		buffer+=5; //glide pointer to message (send ) carefull, dont forget the blankspace
@@ -216,9 +235,44 @@ char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 	}
 }
 
+void sendFileTo(char* message, int to, int from){
+	char *file_contents;
+	long input_file_size;
+	//remove \n at end of string
+	message[strlen(message)-1]=0;
+	FILE* input_file = fopen(message,"r");
+
+	if(input_file != NULL){
+		fseek(input_file, 0, SEEK_END);
+		input_file_size = ftell(input_file);
+		rewind(input_file);
+		file_contents = malloc(input_file_size * (sizeof(char)));
+		fread(file_contents, sizeof(char), input_file_size, input_file);
+		fclose(input_file);
+
+		char* buf;
+		int size = input_file_size+sizeof(message)+MAX_USR_LENGTH + 30;
+		char tmp[size];
+		memset(tmp,0,size);
+		strcat(tmp,message);
+		strcat(tmp," ; ");
+		strcat(tmp,file_contents);
+
+		buf = parseMessage(tmp,strlen(tmp));
+		printf("N%s\n",buf);
+		printf("Envoie au client : %d\n",to);
+		if (Writeline(ctx.socketFd[to], buf, strlen(buf)+1) < 0){
+			debugTrace("Message issue");
+		}
+		else {
+			debugTrace("Message sent\n");
+		}
+		free(buf);
+	}
+}
+
 void sendTo(char* message, int to, int from){
 
-	int i = 0;
 	char* buf;
 	int size = strlen((char*)message)+MAX_USR_LENGTH + 20;
 	char tmp[size];
@@ -227,7 +281,7 @@ void sendTo(char* message, int to, int from){
 	strcat(tmp," : ");
 	strcat(tmp,(char*)message);
 	buf = parseMessage(tmp,strlen(tmp));
-	printf("Envoie au client : %d\n",i);
+	printf("Envoie au client : %d\n",to);
 	if (Writeline(ctx.socketFd[to], buf, strlen(buf)+1) < 0){
 		debugTrace("Message issue");
 	}
