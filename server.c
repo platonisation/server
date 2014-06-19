@@ -199,7 +199,7 @@ char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 		for(i=0;i<LISTENQ;i++){
 			if(!strcmp(name,usrDatas[i].name)){
 				sendFileTo(sv,i,actuel);
-				return push;
+				return sentToAll;
 			}
 		}
 //		*messageToSend = malloc(sizeof(char)*((strlen(help)) + 1));
@@ -254,7 +254,7 @@ void sendFileTo(char* message, int to, int from){
 		int size = input_file_size+sizeof(message)+MAX_USR_LENGTH + 30;
 		char tmp[size];
 		memset(tmp,0,size);
-		strcat(tmp,message);
+		strcat(tmp,"ENDOFFILE");
 		strcat(tmp," ; ");
 		strcat(tmp,file_contents);
 
