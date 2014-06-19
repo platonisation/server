@@ -52,17 +52,17 @@ typedef struct globalData {
 
 }contextServer;
 
-//pour les tests. a changer
 contextServer ctx;
 userDatas usrDatas[LISTENQ];
 
-char* doAction(unsigned char* buffer, char* messageToSend);
+char* doAction(unsigned char* buffer, char* messageToSend, int actuel);
+void sendTo(char* message, int to, int from);
 void killsrv();
 void setUserDatas(int id);
 int isFile(int messageSize);
 void deconnectClient(int sockd);
 int initServer(int argc, char** argv);
-void sendAll(unsigned char* message);
+void sendAll(unsigned char* message, int actuel);
 void printError(int err);
 
 int main(int argc, char *argv[]) {
@@ -119,16 +119,17 @@ int main(int argc, char *argv[]) {
 					if(ctx.socketFd[i] != -1 && FD_ISSET(ctx.socketFd[i],&read_selector)){
 						debugTrace("New message incoming");
 						messageSize = Readline(ctx.socketFd[i], ctx.messageToReceive, MAX_LINE-10);
-						if(messageSize < 0){
+						if(messageSize <= 0){
 							printError(messageSize);
 							deconnectClient(ctx.socketFd[i]);
+							FD_CLR(ctx.socketFd[i],&read_selector);
 							ctx.socketFd[i] = -1;
 							break;
 //							FD_CLR() clear le fd
 						}
 						debugTrace("Reading done");
 						if(isFile(messageSize) == 1){
-							ctx.messageToSend = doAction((unsigned char*)ctx.messageToReceive,ctx.messageToSend);
+							ctx.messageToSend = doAction((unsigned char*)ctx.messageToReceive,ctx.messageToSend,i);
 						}
 						else {
 							// treat files
@@ -172,12 +173,13 @@ int main(int argc, char *argv[]) {
 
 //do something according to buffer's datas
 //commande : PUSH, GET, LIST, CONNECT,
-char* doAction(unsigned char* buffer, char* messageToSend) {
+char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 
 	char* help = "Command list :\nhelp\tsend\tpush\tget\texit";
 	char* ukCommand = "Unknown command";
 	char* receptionOk = "Well received";
 	char* sentToAll = "sentToALl";
+	int i = 0;
 
 	if((strcmp((char*)buffer,"help\n") == 0)){
 		debugTrace("Help");
@@ -190,8 +192,18 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 		if(buffer[0] == '-' && buffer[1] == 'a'){
 			buffer+=2;
 			debugTrace("Sending to everyone");
-			sendAll(buffer);
+			sendAll(buffer,actuel);
 			return sentToAll;
+		}
+		char* name;
+		char* sv;
+		name = strtok_r((char*)buffer," ",&sv);
+
+		for(i=0;i<LISTENQ;i++){
+			if(!strcmp(name,usrDatas[i].name)){
+				sendTo(sv,i,actuel);
+				return sentToAll;
+			}
 		}
 		return receptionOk;
 	}
@@ -204,16 +216,37 @@ char* doAction(unsigned char* buffer, char* messageToSend) {
 	}
 }
 
-void sendAll(unsigned char* message){
+void sendTo(char* message, int to, int from){
 
 	int i = 0;
 	char* buf;
 	int size = strlen((char*)message)+MAX_USR_LENGTH + 20;
 	char tmp[size];
 	memset(tmp,0,size);
+	strcat(tmp,usrDatas[from].name);
+	strcat(tmp," : ");
+	strcat(tmp,(char*)message);
+	buf = parseMessage(tmp,strlen(tmp));
+	printf("Envoie au client : %d\n",i);
+	if (Writeline(ctx.socketFd[to], buf, strlen(buf)+1) < 0){
+		debugTrace("Message issue");
+	}
+	else {
+		debugTrace("Message sent\n");
+	}
+	free(buf);
+}
+
+void sendAll(unsigned char* message, int actuel){
+
+	int i = 0;
+	char* buf;
+	int size = strlen((char*)message)+MAX_USR_LENGTH + 20;
+	char tmp[size];
 	for(i=0;i<LISTENQ;i++){
-		if(ctx.socketFd[i] != -1){
-			strcat(tmp,usrDatas[i].name);
+		memset(tmp,0,size);
+		if(ctx.socketFd[i] != -1  && (i != actuel)){
+			strcat(tmp,usrDatas[actuel].name);
 			strcat(tmp," : ");
 			strcat(tmp,(char*)message);
 			buf = parseMessage(tmp,strlen(tmp));
@@ -224,9 +257,10 @@ void sendAll(unsigned char* message){
 			else {
 				debugTrace("Message sent\n");
 			}
+			free(buf);
 		}
+
 	}
-	free(buf);
 }
 
 int isFile(int messageSize){
@@ -270,6 +304,9 @@ void deconnectClient(int sockd){
 	}
 }
 
+
+//bug: deux utilisateurs peuvent avoir le meme nom
+// nom trop grand
 void setUserDatas(int id){
 	char* buf = malloc(sizeof(char)*(MAX_USR_LENGTH + 4)); //+4 : <name(10 characters)> + < > + <group> + < > + <rights>
 	int size = Readline(ctx.socketFd[id], buf, MAX_LINE-10);
@@ -359,7 +396,7 @@ int initServer(int argc, char** argv){
 void printError(int err){
 	switch(err){
 		case 0:
-			debugTrace("Nothing to read, timeout");
+			debugTrace("deconnection");
 		break;
 		case -1:
 			debugTrace("Known error");
