@@ -57,7 +57,6 @@ userDatas usrDatas[LISTENQ];
 
 char* doAction(unsigned char* buffer, char* messageToSend, int actuel);
 void sendTo(char* message, int to, int from);
-void killsrv();
 void setUserDatas(int id);
 int isFile(int messageSize);
 void deconnectClient(int sockd);
@@ -99,7 +98,6 @@ int main(int argc, char *argv[]) {
 				int sock = accept(ctx.mainSocket, NULL, NULL);
 				if(sock == -1) {
 					fprintf(stderr, "ECHOSERV: Error calling accept()\n%s", strerror(errno));
-//					killsrv(ctx.socketFd);
 					exit(EXIT_FAILURE);
 				}
 				debugTrace("New connection established\n");
@@ -126,15 +124,9 @@ int main(int argc, char *argv[]) {
 							FD_CLR(ctx.socketFd[i],&read_selector);
 							ctx.socketFd[i] = -1;
 							break;
-//							FD_CLR() clear le fd
 						}
 						debugTrace("Reading done");
-//						if(isFile(messageSize) == 1){
-							ctx.messageToSend = doAction((unsigned char*)ctx.messageToReceive,ctx.messageToSend,i);
-//						}
-//						else {
-							// treat files
-//						}
+						ctx.messageToSend = doAction((unsigned char*)ctx.messageToReceive,ctx.messageToSend,i);
 						debugTrace("Analyze done");
 						//Le message a déjà été envoyé
 						if(strcmp(ctx.messageToSend,"sentToALl")){
@@ -148,7 +140,6 @@ int main(int argc, char *argv[]) {
 								debugTrace("Message sent\n");
 						}
 
-//						FD_CLR(ctx.socketFd[i],&active_read_selector);
 					}
 				}
 				printf("Over\n");
@@ -180,15 +171,21 @@ char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 	char* ukCommand = "Unknown command";
 	char* receptionOk = "Well received";
 	char* sentToAll = "sentToALl";
-	char* push = "pushed";
 	char* failed = "failed";
 	int i = 0;
 
 	if((strcmp((char*)buffer,"help\n") == 0)){
 		debugTrace("Help");
-//		*messageToSend = malloc(sizeof(char)*((strlen(help)) + 1));
-//		strcpy(*messageToSend,help);
 		return help;
+	}
+	else if((strcmp((char*)buffer,"list\n") == 0)){
+		debugTrace("List");
+		for(i=0;i<LISTENQ;i++){
+			if (ctx.socketFd[i] != -1 && Writeline(ctx.socketFd[actuel], usrDatas[i].name, strlen(usrDatas[i].name)+1) < 0){
+				debugTrace("Message issue");
+			}
+		}
+		return sentToAll;
 	}
 	else if(strstr((char*)buffer,"push") != NULL){
 		debugTrace("push");
@@ -202,9 +199,7 @@ char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 				return sentToAll;
 			}
 		}
-//		*messageToSend = malloc(sizeof(char)*((strlen(help)) + 1));
-//		strcpy(*messageToSend,help);
-		return failed;//NON
+		return failed;
 	}
 	else if(strstr((char*)buffer,"send") != NULL){  //command exemple : send coco channel
 		buffer+=5; //glide pointer to message (send ) carefull, dont forget the blankspace
@@ -228,9 +223,6 @@ char* doAction(unsigned char* buffer, char* messageToSend, int actuel) {
 	}
 	else{
 		debugTrace("UnknownCommand");
-//		printf("%s\n",buffer);
-//		*messageToSend = malloc(sizeof(char)*((strlen(ukCommand) + 1)));
-//		strcpy(*messageToSend,ukCommand);
 		return ukCommand;
 	}
 }
@@ -327,33 +319,10 @@ int isFile(int messageSize){
 		debugTrace("This is a file");
 		return 2;
 	}
-
-//	unsigned char start = ctx->messageToReceive[0];
-//	unsigned char size = ctx->messageToReceive[1];
-//
-//	if (start == 0xFE) {
-//	//			read(sockd,src,4);
-//	//			read(sockd,dst,4);
-//	//size in bytes
-//		if(size < 10000000){//10Mo, msg
-//			debugTrace("You got a message\n");
-//			printf("%s\n",ctx->messageToReceive);
-//			doAction((unsigned char*)ctx->messageToReceive+2,&(ctx->messageToSend));
-//		}
-//		else { // files
-//			//attention bug ! client envoie coucou trouve un fichier
-//			debugTrace("You got a file\n");
-//		}
-//	}
-//	else {
-//		debugTrace("This is not a valid sequence\n");
-//	}
-//	return 1;
 }
 
 void deconnectClient(int sockd){
 	if(close(sockd) != 0){
-//do something
 		debugTrace("FAIL DECONNECTING CLIENT");
 	}
 }
@@ -445,6 +414,7 @@ int initServer(int argc, char** argv){
 		fprintf(stderr, "ECHOSERV: Error calling listen()\n");
 		exit(EXIT_FAILURE);
     }
+    return 0;
 }
 
 void printError(int err){
@@ -459,15 +429,4 @@ void printError(int err){
 			debugTrace("Is this possible ?");
 		break;
 	}
-}
-
-void killsrv(){
-//	int i = 0;
-//	for(i = 0; i < LISTENQ ; i++){
-//		if(close(ctx.socketFd[i]) < 0){
-//		    fprintf(stderr, "ECHOSERV: Error calling close()\n");
-//		    exit(EXIT_FAILURE);
-//		}
-//	}
-//	exit(EXIT_SUCCESS);
 }
