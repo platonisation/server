@@ -1,29 +1,3 @@
-/*
- * server.c
- *
- *  Created on: Apr 16, 2014
- *  Author: Timoté Bonnin
- *
- *
- *  Kill if receive ctrl+c
- *
- *  protocole : [accorche][header][msg]
- *  [header] = [src][dst][size msg]
- *
- * 	Authentification fonctionne par couple IP : ID
- *
- *
- Serveur
-**Des notications sont envoyées aux clients à chaque connexion et déconnexion.
-**Chaque serveur doit maintenir une liste des membres connectés sur le réseau.
-**Un utilisateur p eut créer un compte (pseudo / mot de passe). Ce doit être une notion globale au
-réseau : un compte enregistré depuis un serveur doit être reconnu à une pro chaine connexion sur
-un autre serveur.
-**Un utilisateur enregistré p eut être administrateur du réseau. Il p eut alors expulser bannir un
-autre utilisateur
- *
- */
-
 #include <string.h>
 
 #include "dependencies/communication/communication.h"
